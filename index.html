@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>점심 메뉴 룰렛</title>
+  <!-- GSAP -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <!-- Canvas‑confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <style>
+    :root{--primary:#457b9d;--primary-dark:#1d3557;--bg:#f4f6fa;}
+    *{box-sizing:border-box;}
+    body{font-family:'Pretendard',sans-serif;display:flex;flex-direction:column;align-items:center;gap:20px;padding:24px 16px;margin:0;min-height:100vh;background:var(--bg);}
+    .wheel-wrapper{position:relative;width:min(90vw,420px);height:min(90vw,420px);} .wheel{width:100%;height:100%;transform:rotate(0deg);} .pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:14px solid transparent;border-right:14px solid transparent;border-top:24px solid #e63946;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));}
+    .controls{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;max-width:420px;} .controls input{flex:1 1 160px;padding:10px 12px;font-size:16px;border:1px solid #cbd5e1;border-radius:6px;min-width:0;} button{flex:0 1 110px;padding:12px 18px;font-size:16px;border:none;border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;transition:background .2s;} button:hover{background:var(--primary-dark);} 
+    #result{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);} 
+    #popup{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s;} #popup.show{opacity:1;pointer-events:all;} .popup-box{background:#fff;padding:32px 24px;border-radius:16px;text-align:center;max-width:90vw;box-shadow:0 10px 25px rgba(0,0,0,.2);} .popup-box h2{margin:0 0 24px;font-size:24px;color:var(--primary-dark);} .popup-box button{width:100%;background:var(--primary);font-size:18px;}
+    @media(max-width:500px){button{flex:1 1 100%;font-size:15px;}.controls{flex-direction:column;gap:12px;}.popup-box h2{font-size:20px;}}
+  </style>
+</head>
+<body>
+  <div class="wheel-wrapper">
+    <svg id="wheel" class="wheel" viewBox="-200 -200 400 400"></svg>
+    <div class="pointer"></div>
+  </div>
+  <div class="controls">
+    <input id="newItem" type="text" placeholder="음식 이름 입력" />
+    <button id="addButton">추가</button>
+    <button id="spinButton">돌려!</button>
+  </div>
+  <div id="result" aria-live="polite"></div>
+  <div id="popup"><div class="popup-box"><h2 id="popupText"></h2><button id="closePopup">확인</button></div></div>
+<script>
+const SPIN_DURATION=2.5, STORAGE_KEY='lunchMenuItems', DEFAULT_ITEMS=['김치찌개','된장찌개','삼겹살','비빔밥','치킨','피자','돈까스','제육볶음'];
+let menuItems;try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY));menuItems=Array.isArray(saved)&&saved.length?saved:[...DEFAULT_ITEMS];}catch{menuItems=[...DEFAULT_ITEMS];}
+const baseColors=['#ffadad','#ffd6a5','#fdffb6','#caffbf','#9bf6ff','#a0c4ff','#bdb2ff','#ffc6ff'];
+const svg=document.getElementById('wheel'),spinBtn=document.getElementById('spinButton'),addBtn=document.getElementById('addButton'),newInput=document.getElementById('newItem'),popup=document.getElementById('popup'),popupText=document.getElementById('popupText'),closePopupBtn=document.getElementById('closePopup');
+let currentRotation=0,spinning=false;
+const degToRad=d=>d*Math.PI/180,colorOf=i=>baseColors[i%baseColors.length],saveMenu=()=>localStorage.setItem(STORAGE_KEY,JSON.stringify(menuItems));
+function drawWheel(){svg.innerHTML='';const R=200,n=menuItems.length;if(!n){const msg=document.createElementNS('http://www.w3.org/2000/svg','text');msg.textContent='메뉴를 추가해 주세요';msg.setAttribute('x',0);msg.setAttribute('y',0);msg.setAttribute('fill','#6c757d');msg.setAttribute('font-size','18');msg.setAttribute('font-weight','600');msg.setAttribute('dominant-baseline','middle');msg.setAttribute('text-anchor','middle');svg.appendChild(msg);return;}const slice=360/n;menuItems.forEach((label,i)=>{const sa=slice*i,ea=sa+slice,x1=R*Math.cos(degToRad(sa)),y1=R*Math.sin(degToRad(sa)),x2=R*Math.cos(degToRad(ea)),y2=R*Math.sin(degToRad(ea));const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',`M0 0 L${x1} ${y1} A${R} ${R} 0 ${slice>180?1:0} 1 ${x2} ${y2} Z`);path.setAttribute('fill',colorOf(i));path.setAttribute('stroke','#fff');path.setAttribute('stroke-width','2');svg.appendChild(path);const ca=sa+slice/2,tx=R*0.62*Math.cos(degToRad(ca)),ty=R*0.62*Math.sin(degToRad(ca));const text=document.createElementNS('http://www.w3.org/2000/svg','text');text.textContent=label;text.setAttribute('x',tx);text.setAttribute('y',ty);text.setAttribute('fill','#0d1b2a');text.setAttribute('font-size','17');text.setAttribute('font-weight','700');text.setAttribute('dominant-baseline','middle');text.setAttribute('text-anchor','middle');text.setAttribute('transform',`rotate(${ca} ${tx} ${ty})`);text.style.cursor='pointer';text.addEventListener('click',()=>removeItem(label));svg.appendChild(text);});}
+function removeItem(label){if(spinning)return;const idx=menuItems.indexOf(label);if(idx>-1){menuItems.splice(idx,1);saveMenu();currentRotation=0;drawWheel();}}
+function burstConfetti(){const duration=1500,end=Date.now()+duration;(function frame(){confetti({particleCount:5,angle:60,spread:55,origin:{x:0}});confetti({particleCount:5,angle:120,spread:55,origin:{x:1}});if(Date.now()<end)requestAnimationFrame(frame);})();}
+function openPopup(food){popupText.textContent=`오늘 점심은 "${food}"!`;popup.classList.add('show');burstConfetti();}
+function closePopup(){popup.classList.remove('show');}
+closePopupBtn.addEventListener('click',closePopup);popup.addEventListener('click',e=>{if(e.target===popup)closePopup();});
+function spin(){if(spinning)return;if(!menuItems.length){alert('먼저 메뉴를 추가해 주세요!');return;}spinning=true;const n=menuItems.length,slice=360/n,pick=Math.floor(Math.random()*n),rounds=Math.floor(Math.random()*3)+3;base=((currentRotation%360)+360)%360;const target=pick*slice+slice/2;let offset=(270-base-target)%360;if(offset<0)offset+=360;const total=rounds*360+offset;currentRotation+=total;gsap.to(svg,{rotation:currentRotation,duration:SPIN_DURATION,ease:'power4.out',transformOrigin:'50% 50%',onComplete:()=>{spinning=false;openPopup(menuItems[pick]);}});}
+function addItem(){const val=newInput.value.trim();if(!val)return;if(menuItems.includes(val)){alert('이미 존재하는 메뉴입니다!');return;}menuItems.push(val);saveMenu();newInput.value='';currentRotation=0;drawWheel();}
+spinBtn.addEventListener('click',spin);addBtn.addEventListener('click',addItem);newInput.addEventListener('keypress',e=>{if(e.key==='Enter')addItem();});
+drawWheel();
+</script>
+</body>
+</html>
